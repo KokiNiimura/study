@@ -10,6 +10,11 @@ torch = "*"
 torchvision = "*"
 opencv-python = "*"
 numpy = "*"
+jupyter = "*"
+jupytext = "*"
+matplotlib = "*"
+tqdm = "*"
+pillow = "*"
 
 [requires]
 python_version = "3.8"
