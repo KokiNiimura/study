@@ -77,6 +77,7 @@ class FeatureMap_convolution(nn.Module):
         x = self.cbnr_2(x)
         x = self.cbnr_3(x)
         output = self.maxpool(x)
+        
         return output
 
 
