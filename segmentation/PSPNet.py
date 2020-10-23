@@ -12,16 +12,23 @@ class PSPNet(nn.Module):
         img_size_8 = 60
 
         self.feature_conv = FeatureMap_convolution()
-        self.feature_res_1 = ResidualBlockPSP()
-        self.feature_res_2 = ResidualBlockPSP()
-        self.feature_dilated_res_1 = ResidualBlockPSP()
-        self.feature_dilated_res_2 = ResidualBlockPSP()
+        self.feature_res_1 = ResidualBlockPSP(
+            n_blocks=block_config[0], in_channels=128, mid_channels=64, out_channels=256, stride=1, dilation=1)
+        self.feature_res_2 = ResidualBlockPSP(
+            n_blocks=block_config[1], in_channels=256, mid_channels=128, out_channels=512, stride=2, dilation=1)
+        self.feature_dilated_res_1 = ResidualBlockPSP(
+            n_blocks=block_config[2], in_channels=512, mid_channels=256, out_channels=1024, stride=1, dilation=2)
+        self.feature_dilated_res_2 = ResidualBlockPSP(
+            n_blocks=block_config[3], in_channels=1024, mid_channels=512, out_channels=2048, stride=1, dilation=4)
 
-        self.pyramid_pooling = PylamidPooling()
+        self.pyramid_pooling = PylamidPooling(
+            in_channels=2048, pool_sizes=[6, 3, 2, 1], height=img_size_8, width=img_size_8)
 
-        self.decode_feature = DecodePSPFeature()
+        self.decode_feature = DecodePSPFeature(
+            height=img_size, width=img_size, n_classes=n_classes)
 
-        self.aux = AuxiliaryPSPlayers()
+        self.aux = AuxiliaryPSPlayers(
+            in_channels=1024, height=img_size, width=img_size, n_classes=n_classes)
 
     def forward(self, x):
         x = self.feature_conv(x)
@@ -87,8 +94,7 @@ class ResidualBlockPSP(nn.Sequential):
 
         self.add_module(
             "block1",
-            bottleNeckPSP(in_channels, mid_channels,
-                          out_channels, stride, dilation)
+            bottleNeckPSP(in_channels, mid_channels, out_channels, stride, dilation)
         )
 
         for i in range(n_blocks - 1):
@@ -164,7 +170,6 @@ class PylamidPooling(nn.Module):
 
         self.avpools = []
         self.cbrs = []
-        pool_sizes = [6, 3, 2, 1]
         for pool_size in pool_sizes:
             self.avpools.append(nn.AdaptiveAvgPool2d(output_size=pool_size))
             self.cbrs.append(conv2DBatchNormRelu(
@@ -183,8 +188,43 @@ class DecodePSPFeature(nn.Module):
     def __init__(self, height, width, n_classes):
         super(DecodePSPFeature, self).__init__()
 
+        self.height = height
+        self.width = width
 
+        self.cbr = conv2DBatchNormRelu(
+            in_channels=4096, out_channels=512, kernel_size=3, stride=1, padding=1, dilation=1, bias=False)
+        self.dropout = nn.Dropout2d(p=0.1)
+        self.classification = nn.Conv2d(
+            in_channels=512, out_channels=n_classes, kernel_size=1, stride=1, padding=0)
+
+    def forward(self, x):
+        x = self.cbr(x)
+        x = self.dropout(x)
+        x = self.classification(x)
+        output = F.interpolate(
+            x, size=(self.height, self.width), mode="bilinear", align_corners=True)
+
+        return output
 
 
 class AuxiliaryPSPlayers(nn.Module):
-    pass
+    def __init__(self, in_channels, height, width, n_classes):
+        super(AuxiliaryPSPlayers, self).__init__()
+
+        self.height = height
+        self.width = width
+
+        self.cbr = conv2DBatchNormRelu(
+            in_channels=in_channels, out_channels=256, kernel_size=3, stride=1, padding=1, dilation=1, bias=False)
+        self.dropout = nn.Dropout2d(p=0.1)
+        self.classification = nn.Conv2d(
+            in_channels=256, out_channels=n_classes, kernel_size=1, stride=1, padding=0)
+
+    def forward(self, x):
+        x = self.cbr(x)
+        x = self.dropout(x)
+        x = self.classification(x)
+        output = F.interpolate(
+            x, size=(self.height, self.width), mode="bilinear", align_corners=True)
+
+        return output
