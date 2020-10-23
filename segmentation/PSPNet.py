@@ -10,7 +10,6 @@ class PSPNet(nn.Module):
         img_size = 475
         img_size_8 = 60
 
-        # コンストラクタ実装後引数入れる
         self.feature_conv = FeatureMap_convolution()
         self.feature_res_1 = ResidualBlockPSP()
         self.feature_res_2 = ResidualBlockPSP()
@@ -77,12 +76,25 @@ class FeatureMap_convolution(nn.Module):
         x = self.cbnr_2(x)
         x = self.cbnr_3(x)
         output = self.maxpool(x)
-        
+
         return output
 
 
 class ResidualBlockPSP(nn.Sequential):
-    pass
+    def __init__(self, n_blocks, in_channels, mid_channels, out_channels, stride, dilation):
+        super(ResidualBlockPSP, self).__init__()
+
+        self.add_module(
+            "block1",
+            bottleNeckPSP(in_channels, mid_channels,
+                          out_channels, stride, dilation)
+        )
+
+        for i in range(n_blocks-1):
+            self.add_module(
+                "block" + str(i+2),
+                bottleNeckIdentifyPSP(out_channels, mid_channels, stride, dilation)
+            )
 
 
 class Conv2DBatchNorm(nn.Module):
