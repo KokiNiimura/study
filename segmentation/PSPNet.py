@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class PSPNet(nn.Module):
     def __init__(self, n_classes):
         super(PSPNet, self).__init__()
@@ -90,31 +91,99 @@ class ResidualBlockPSP(nn.Sequential):
                           out_channels, stride, dilation)
         )
 
-        for i in range(n_blocks-1):
+        for i in range(n_blocks - 1):
             self.add_module(
-                "block" + str(i+2),
+                "block" + str(i + 2),
                 bottleNeckIdentifyPSP(out_channels, mid_channels, stride, dilation)
             )
 
 
-class Conv2DBatchNorm(nn.Module):
-    pass
+class conv2DBatchNorm(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, dilation, bias):
+        super(conv2DBatchNorm, self).__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size,
+                              stride, padding, dilation, bias=bias)
+        self.batchnorm = nn.BatchNorm2d(out_channels)
+
+    def forward(self, x):
+        x = self.comv(x)
+        outputs = self.batchnorm(x)
+
+        return outputs
 
 
 class bottleNeckPSP(nn.Module):
-    pass
+    def __init__(self, in_channels, mid_channels, out_channels, stride, dilation):
+        super(bottleNeckPSP, self).__init__()
+
+        self.cbr_1 = conv2DBatchNormRelu(
+            in_channels, mid_channels, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
+        self.cbr_2 = conv2DBatchNormRelu(
+            in_channels, mid_channels, kernel_size=3, stride=stride, padding=dilation, dilation=dilation, bias=False)
+        self.cb_3 = conv2DBatchNorm(
+            in_channels, mid_channels, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
+
+        self.cb_residual = conv2DBatchNorm(
+            in_channels, out_channels, kernel_size=1, stride=stride, padding=0, dilation=1, bias=False)
+
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        conv = self.cb_3(self.cbr_2(self.cbr_1(x)))
+        residual = self.cb_residual(x)
+        return self.relu(conv + residual)
 
 
 class bottleNeckIdentifyPSP(nn.Module):
-    pass
+    def __init__(self, in_channels, mid_channels, out_channels, stride, dilation):
+        super(bottleNeckIdentifyPSP, self).__init__()
+
+        self.cbr_1 = conv2DBatchNormRelu(
+            in_channels, mid_channels, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
+        self.cbr_2 = conv2DBatchNormRelu(
+            in_channels, mid_channels, kernel_size=3, stride=stride, padding=dilation, dilation=dilation, bias=False)
+        self.cb_3 = conv2DBatchNorm(
+            in_channels, mid_channels, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
+
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        conv = self.cb_3(self.cbr_2(self.cbr_1(x)))
+        residual = x
+        return self.relu(conv + residual)
 
 
 class PylamidPooling(nn.Module):
-    pass
+    def __init__(self, in_channels, pool_sizes, height, width):
+        super(PylamidPooling, self).__init__()
+
+        self.height = height
+        self.width = width
+
+        out_channels = int(in_channels / len(pool_sizes))
+
+        self.avpools = []
+        self.cbrs = []
+        pool_sizes = [6, 3, 2, 1]
+        for pool_size in pool_sizes:
+            self.avpools.append(nn.AdaptiveAvgPool2d(output_size=pool_size))
+            self.cbrs.append(conv2DBatchNormRelu(
+                in_channels, out_channels, kernel_size=1, stride=1, padding=0, dilation=1, bias=False))
+
+    def forward(self, x):
+        out = [x]
+        for cbr, avpool in zip(self.cbrs, self.avpools):
+            out.append(F.interpolate(cbr(avpool(x)), size=(self.height, self.width),
+                                     mode="bilinear", align_corners=True))
+
+        return torch.cat(out, dim=1)
 
 
 class DecodePSPFeature(nn.Module):
-    pass
+    def __init__(self, height, width, n_classes):
+        super(DecodePSPFeature, self).__init__()
+
+
 
 
 class AuxiliaryPSPlayers(nn.Module):
