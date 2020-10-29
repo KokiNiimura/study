@@ -15,6 +15,7 @@ jupytext = "*"
 matplotlib = "*"
 tqdm = "*"
 pillow = "*"
+scipy = "*"
 
 [requires]
 python_version = "3.8"
