@@ -10,8 +10,7 @@ class Embedder(nn.Module):
         super(Embedder, self).__init__()
 
         self.embeddings = nn.Embedding.from_pretrained(
-            embeddings=text_embedding_vectors, freeze=True
-        )
+            embeddings=text_embedding_vectors, freeze=True)
 
     def forward(self, x):
         x_vec = self.embeddings(x)
